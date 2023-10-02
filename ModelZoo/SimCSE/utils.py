@@ -36,7 +36,8 @@ def get_encoder(
     checkpoint_path,
     model='bert',
     pooling='first-last-avg',
-    dropout_rate=0.1
+    dropout_rate=0.1,
+    return_keras_model=False
 ):
     """建立编码器
     """
@@ -45,23 +46,26 @@ def get_encoder(
     if pooling == 'pooler':
         bert = build_transformer_model(
             config_path,
-            checkpoint_path,
+            checkpoint_path=None,
             model=model,
             with_pool='linear',
-            dropout_rate=dropout_rate
+            dropout_rate=dropout_rate,
+            return_keras_model=return_keras_model
         )
     else:
         bert = build_transformer_model(
             config_path,
-            checkpoint_path,
+            checkpoint_path=None,
             model=model,
-            dropout_rate=dropout_rate
+            dropout_rate=dropout_rate,
+            return_keras_model=return_keras_model
         )
 
+    bert_model = bert.model
     outputs, count = [], 0
     while True:
         try:
-            output = bert.get_layer(
+            output = bert_model.get_layer(
                 'Transformer-%d-FeedForward-Norm' % count
             ).output
             outputs.append(output)
@@ -80,11 +84,11 @@ def get_encoder(
     elif pooling == 'cls':
         output = keras.layers.Lambda(lambda x: x[:, 0])(outputs[-1])
     elif pooling == 'pooler':
-        output = bert.output
+        output = bert_model.output
 
     # 最后的编码器
-    encoder = Model(bert.inputs, output)
-    return encoder
+    encoder = Model(bert_model.inputs, output)
+    return encoder, bert
 
 
 def convert_to_ids(data, tokenizer, maxlen=64):
@@ -97,8 +101,8 @@ def convert_to_ids(data, tokenizer, maxlen=64):
         token_ids = tokenizer.encode(d[1], maxlen=maxlen)[0]
         b_token_ids.append(token_ids)
         labels.append(d[2])
-    a_token_ids = sequence_padding(a_token_ids)
-    b_token_ids = sequence_padding(b_token_ids)
+    a_token_ids = sequence_padding(a_token_ids, maxlen)
+    b_token_ids = sequence_padding(b_token_ids, maxlen)
     return a_token_ids, b_token_ids, labels
 
 
